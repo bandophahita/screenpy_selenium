@@ -1,12 +1,14 @@
 """Additional Resolutions to provide expected answers for Selenium tests."""
 
 from .is_clickable import IsClickable
+from .is_enabled import IsEnabled
 from .is_invisible import IsInvisible
 from .is_present import IsPresent
 from .is_visible import IsVisible
 
 # Natural-language-enabling syntactic sugar
-IsEnabled = Enabled = Clickable = IsClickable
+Enabled = IsEnabled
+Clickable = IsClickable
 IsDisplayed = Displayed = Visible = IsVisible
 IsNotDisplayed = NotDisplayed = Invisible = IsInvisible
 Exist = Exists = Present = IsPresent
