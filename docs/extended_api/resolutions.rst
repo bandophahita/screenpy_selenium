@@ -43,3 +43,10 @@ IsPresent
 ``Exist``
 
 .. autoclass:: IsPresent
+
+IsEnabled
+---------
+
+**Aliases:** ``Enabled``
+
+.. autoclass:: IsEnabled
