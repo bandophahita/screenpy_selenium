@@ -7,9 +7,19 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from hamcrest.core.string_description import StringDescription
 
-from screenpy_selenium import IsClickable, IsEnabled, IsInvisible, IsPresent, IsVisible
+from screenpy_selenium import (
+    IsClickable,
+    IsDisabled,
+    IsEnabled,
+    IsInvisible,
+    IsPresent,
+    IsVisible,
+)
 from screenpy_selenium.resolutions.custom_matchers.is_clickable_element import (
     IsClickableElement,
+)
+from screenpy_selenium.resolutions.custom_matchers.is_disabled_element import (
+    IsDisabledElement,
 )
 from screenpy_selenium.resolutions.custom_matchers.is_enabled_element import (
     IsEnabledElement,
@@ -343,4 +353,55 @@ class TestIsEnabled:
         assert [r.msg for r in caplog.records] == [
             "... hoping it's enabled.",
             "    => the element is enabled",
+        ]
+
+
+class TestIsDisabled:
+    def test_can_be_instantiated(self) -> None:
+        id = IsDisabled()
+
+        assert isinstance(id, IsDisabled)
+
+    def test_matches_a_disabled_element(self) -> None:
+        element = get_mocked_element()
+        element.is_enabled.return_value = False
+        id = IsDisabled().resolve()
+
+        assert id._matches(element)
+
+    def test_does_not_match_disabled_element(self) -> None:
+        element = get_mocked_element()
+        element.is_enabled.return_value = True
+        id = IsDisabled().resolve()
+
+        assert not id._matches(None)  # element was not found by Element()
+        assert not id._matches(element)
+
+    def test_descriptions(self) -> None:
+        element = get_mocked_element()
+        element.is_enabled.return_value = False
+        expected = ExpectedDescriptions(
+            describe_to="the element is disabled",
+            describe_match="it was disabled",
+            describe_mismatch="was not disabled",
+            describe_none="was not even present",
+        )
+        id = IsDisabled()
+
+        assert id.describe() == "disabled"
+        _assert_descriptions(id.resolve(), element, expected)
+
+    def test_type_hint(self) -> None:
+        id = IsDisabled()
+        annotation = id.resolve.__annotations__["return"]
+        assert annotation == "IsDisabledElement"
+        assert type(id.resolve()) is IsDisabledElement
+
+    def test_beat_logging(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.INFO)
+        IsDisabled().resolve()
+
+        assert [r.msg for r in caplog.records] == [
+            "... hoping it's disabled.",
+            "    => the element is disabled",
         ]
