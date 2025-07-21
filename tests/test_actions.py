@@ -1470,11 +1470,15 @@ class TestWait:
         w2 = Wait(0).seconds_for_the(target)
         w3 = Wait().using(foo)
         w4 = Wait().using(foo).with_(target)
+        w5 = Wait().polling(1).seconds()
+        w6 = Wait().polling(50).milliseconds()
 
         assert isinstance(w1, Wait)
         assert isinstance(w2, Wait)
         assert isinstance(w3, Wait)
         assert isinstance(w4, Wait)
+        assert isinstance(w5, Wait)
+        assert isinstance(w6, Wait)
 
     def test_implements_protocol(self) -> None:
         r = Wait(1)
@@ -1522,7 +1526,7 @@ class TestWait:
         mocked_ec.visibility_of_element_located.__name__ = "foo"
         mocked_browser = get_mocked_browser(Tester)
 
-        Wait.for_the(test_target).perform_as(Tester)
+        Wait.for_(test_target).perform_as(Tester)
 
         mocked_webdriverwait.assert_called_once_with(
             mocked_browser, settings.TIMEOUT, settings.POLLING
@@ -1544,15 +1548,42 @@ class TestWait:
         mocked_browser = get_mocked_browser(Tester)
         timeout = 4
 
-        Wait(timeout).seconds_for(test_target).perform_as(Tester)
-
-        mocked_webdriverwait.assert_called_once_with(
-            mocked_browser, timeout, settings.POLLING
+        Wait(timeout).seconds_for(test_target).polling(50).milliseconds().perform_as(
+            Tester
         )
+
+        mocked_webdriverwait.assert_called_once_with(mocked_browser, timeout, 0.05)
         mocked_ec.visibility_of_element_located.assert_called_once_with(test_target)
         mocked_webdriverwait(mocked_browser, timeout).until.assert_called_once_with(
             mocked_ec.visibility_of_element_located(test_target.locator)
         )
+
+    @mock.patch("screenpy_selenium.actions.wait.EC", autospec=True)
+    @mock.patch("screenpy_selenium.actions.wait.WebDriverWait", autospec=True)
+    def test__timeframebuilder_is_performable(
+        self, mocked_webdriverwait: mock.Mock, mocked_ec: mock.Mock, Tester: Actor
+    ) -> None:
+        test_target = Target.the("foo").located_by("//bar")
+        mocked_ec.visibility_of_element_located.__name__ = "foo"
+        mocked_browser = get_mocked_browser(Tester)
+        timeout = 1
+
+        Wait(timeout).seconds_for(test_target).polling(0.3).perform_as(Tester)
+
+        mocked_webdriverwait.assert_called_once_with(mocked_browser, timeout, 0.3)
+        mocked_ec.visibility_of_element_located.assert_called_once_with(test_target)
+        mocked_webdriverwait(mocked_browser, timeout).until.assert_called_once_with(
+            mocked_ec.visibility_of_element_located(test_target.locator)
+        )
+
+    def test_valueerror_when_poll_is_larger_than_timeout(self, Tester: Actor) -> None:
+        ev = Wait(0.1).polling_every(200).milliseconds()
+
+        with pytest.raises(UnableToAct) as actual_exception:
+            ev.perform_as(Tester)
+
+        expected_msg = "Poll period must be less than or equal to timeout."
+        assert expected_msg in str(actual_exception)
 
     @mock.patch("screenpy_selenium.actions.wait.WebDriverWait", autospec=True)
     def test_custom(self, mocked_webdriverwait: mock.Mock, Tester: Actor) -> None:

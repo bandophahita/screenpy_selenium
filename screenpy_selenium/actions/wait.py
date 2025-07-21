@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 from screenpy import settings
-from screenpy.exceptions import DeliveryError
+from screenpy.exceptions import DeliveryError, UnableToAct
 from screenpy.pacing import beat
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.support import expected_conditions as EC
@@ -15,6 +15,7 @@ from ..abilities import BrowseTheWeb
 
 if TYPE_CHECKING:
     from screenpy import Actor
+    from selenium.webdriver.remote.webelement import WebElement
     from typing_extensions import Self
 
     from ..target import Target
@@ -49,14 +50,60 @@ class Wait:
                 cookies_to_contain, "for a cookie that has {0}"
             ).with_("delicious=true")
         )
+
+        the_actor.attempts_to(Wait.for_(LOGIN_FORM).polling_every(100).milliseconds()
     """
 
     args: Iterable[Any]
     timeout: float
     log_detail: str | None
 
+    class _TimeframeBuilder:
+        """Build a timeframe, combining numbers and units."""
+
+        def __init__(
+            self,
+            wait: Wait,
+            amount: float,
+            attribute: str,
+        ) -> None:
+            self.wait = wait
+            self.amount = amount
+            self.attribute = attribute
+            setattr(self.wait, self.attribute, self.amount)
+
+        def milliseconds(self) -> Wait:
+            """Set the timeout in milliseconds."""
+            setattr(self.wait, self.attribute, self.amount / 1000)
+            return self.wait
+
+        millisecond = milliseconds
+
+        def seconds(self) -> Wait:
+            """Set the timeout in seconds."""
+            setattr(self.wait, self.attribute, self.amount)
+            return self.wait
+
+        second = seconds
+
+        def perform_as(self, the_actor: Actor) -> None:
+            """Just in case the author forgets to use a unit method."""
+            the_actor.attempts_to(self.wait)
+
+    def polling(self, amount: float) -> _TimeframeBuilder:
+        """Adjust the polling frequency.
+
+        Aliases:
+            * ``polling_every``
+            * ``trying_every``
+        """
+        self.poll = amount
+        return self._TimeframeBuilder(self, amount, "poll")
+
+    polling_every = trying_every = polling
+
     @classmethod
-    def for_the(cls, target: Target) -> Self:
+    def for_the(cls, target: Target | WebElement) -> Self:
         """Set the Target to wait for.
 
         Aliases:
@@ -65,11 +112,11 @@ class Wait:
         return cls(seconds=settings.TIMEOUT, args=[target])
 
     @classmethod
-    def for_(cls, target: Target) -> Self:
+    def for_(cls, target: Target | WebElement) -> Self:
         """Alias for :meth:`~screenpy_selenium.actions.Wait.for_the`."""
         return cls.for_the(target=target)
 
-    def seconds_for_the(self, target: Target) -> Self:
+    def seconds_for_the(self, target: Target | WebElement) -> Self:
         """Set the Target to wait for, after changing the default timeout."""
         self.args = [target]
         return self
@@ -135,10 +182,14 @@ class Wait:
     @beat("{} waits up to {timeout} seconds {log_message}")
     def perform_as(self, the_actor: Actor) -> None:
         """Direct the Actor to wait for the condition to be satisfied."""
+        if self.poll > self.timeout:
+            msg = "Poll period must be less than or equal to timeout."
+            raise UnableToAct(msg)
+
         browser = the_actor.ability_to(BrowseTheWeb).browser
 
         try:
-            WebDriverWait(browser, self.timeout, settings.POLLING).until(
+            WebDriverWait(browser, self.timeout, self.poll).until(
                 self.condition(*self.args)
             )
         except WebDriverException as e:
@@ -155,3 +206,4 @@ class Wait:
         self.timeout = seconds if seconds is not None else settings.TIMEOUT
         self.condition = EC.visibility_of_element_located
         self.log_detail = None
+        self.poll = settings.POLLING
